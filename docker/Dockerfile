@@ -9,9 +9,9 @@ ENV LANG=zh_CN.UTF-8 \
     LC_CTYPE=zh_CN.UTF-8 \
     LC_ALL=C \
     PYTHONPATH=/data/InStock \
-    C_INCLUDE_PATH=/usr/local/include/ta-lib \
-    CPLUS_INCLUDE_PATH=/usr/local/include/ta-lib \
-    LD_LIBRARY_PATH=/usr/local/lib
+    C_INCLUDE_PATH=/usr/local/include/ta-lib:/usr/include/ta-lib \
+    CPLUS_INCLUDE_PATH=/usr/local/include/ta-lib:/usr/include/ta-lib \
+    LD_LIBRARY_PATH=/usr/local/lib:/usr/lib
 
 # 暴露服务端口
 EXPOSE 9988
@@ -43,16 +43,19 @@ RUN apt-get update && \
     ./configure --prefix=/usr/local && \
     make -j$(nproc) && \
     make install && \
-    cd / && \
-    rm -rf /tmp/ta-lib* && \
-    ldconfig && \  # 关键：更新动态链接库缓存
+    ldconfig && \  # 更新动态链接库缓存
     # 验证 TA-Lib 头文件是否存在
     ls /usr/local/include/ta-lib/ta_defs.h && \
-    # 安装 Python 依赖
-    pip install --upgrade pip && \
-    pip install TA-Lib --no-cache-dir && \
-    # 清理构建工具
-    apt-get purge -y \
+    # 清理临时文件
+    cd / && \
+    rm -rf /tmp/ta-lib*
+
+# 升级 pip 并单独安装 TA_Lib
+RUN pip install --upgrade pip && \
+    pip install TA-Lib --no-cache-dir
+
+# 清理构建工具
+RUN apt-get purge -y \
         gcc \
         make \
         python3-dev \
