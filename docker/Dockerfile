@@ -7,8 +7,8 @@ ENV LANG=zh_CN.UTF-8 \
     LC_ALL=C \
     PYTHONPATH=/data/InStock \
     # 关键：强制指定头文件和库路径
-    C_INCLUDE_PATH=/usr/include/ta-lib/ \
-    CPLUS_INCLUDE_PATH=/usr/include/ta-lib/ \
+    C_INCLUDE_PATH=/usr/local/include/ta-lib/ \
+    CPLUS_INCLUDE_PATH=/usr/local/include/ta-lib/ \
     LD_LIBRARY_PATH=/usr/local/lib
 
 EXPOSE 9988
@@ -33,25 +33,28 @@ RUN sed -i "s@http://$deb\|security$.debian.org@https://mirrors.aliyun.com@g" /e
         # 关键：安装 TA-Lib 开发头文件
         libta-lib-dev \
         && \
-    # 手动编译 TA-Lib（确保头文件路径正确）
+    # 手动编译 TA-Lib（覆盖系统库）
     mkdir -p /tmp/ta-lib && \
     wget -O /tmp/ta-lib.tar.gz https://downloads.sourceforge.net/project/ta-lib/ta-lib/0.4.0/ta-lib-0.4.0-src.tar.gz && \
     tar -xzf /tmp/ta-lib.tar.gz -C /tmp/ta-lib --strip-components=1 && \
     cd /tmp/ta-lib && \
-    ./configure --prefix=/usr && \
-    make -j$(nproc) && \
-    make install && \
-    cd / && \
+    ./configure --prefix=/usr/local \  # 关键：安装到 /usr/local
+    && make -j$(nproc) \
+    && make install \
+    && cd / \
+    && rm -rf /tmp/ta-lib* \
     # 验证头文件路径（调试用）
-    ls -l /usr/include/ta-lib/ta_defs.h && \
-    rm -rf /tmp/ta-lib* && \
+    && echo "--- 头文件验证 ---" \
+    && ls -l /usr/local/include/ta-lib/ta_defs.h \
+    && echo "--- 库文件验证 ---" \
+    && ldconfig -p | grep ta_lib \
     # 升级 pip 并安装 Python 依赖
-    pip install --upgrade pip && \
-    pip install \
+    && pip install --upgrade pip \
+    && pip install \
         TA-Lib \  # 注意包名是短横线
-        --no-cache-dir && \
+        --no-cache-dir \
     # 清理构建工具（确保在最后一步清理）
-    apt-get purge -y \
+    && apt-get purge -y \
         gcc \
         make \
         python3-dev \
@@ -60,10 +63,9 @@ RUN sed -i "s@http://$deb\|security$.debian.org@https://mirrors.aliyun.com@g" /e
         pkg-config \
         curl \
         wget \
-        && \
-    apt-get autoremove -y && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/* /root/.cache/*
+    && apt-get autoremove -y \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* /root/.cache/*
 
 # 其他步骤保持不变...
 
@@ -87,3 +89,7 @@ PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin \n\
     chmod 600 /var/spool/cron/crontabs/root
 
 ENTRYPOINT ["supervisord","-n","-c","/data/InStock/supervisor/supervisord.conf"]
+
+# 检查编译器搜索路径
+RUN echo "--- 编译器包含路径 ---" \
+    && gcc -xc -E -v - 2>&1 | sed -n '/#include <...>/,/End of search list/p'
