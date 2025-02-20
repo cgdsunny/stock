@@ -46,6 +46,8 @@ RUN apt-get update && \
     cd / && \
     rm -rf /tmp/ta-lib* && \
     ldconfig && \  # 关键：更新动态链接库缓存
+    # 验证 TA-Lib 头文件是否存在
+    ls /usr/local/include/ta-lib/ta_defs.h && \
     # 安装 Python 依赖
     pip install --upgrade pip && \
     pip install TA-Lib --no-cache-dir && \
@@ -80,6 +82,10 @@ RUN chmod 755 /data/InStock/instock/bin/run_*.sh && \
 30 17 * * 1-5 /bin/run-parts /etc/cron.workdayly\n\
 30 10 * * 3,6 /bin/run-parts /etc/cron.monthly\n" > /var/spool/cron/crontabs/root && \
     chmod 600 /var/spool/cron/crontabs/root
+
+# 安装其他 Python 依赖
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
 # 启动入口
 ENTRYPOINT ["supervisord", "-n", "-c", "/data/InStock/supervisor/supervisord.conf"]
