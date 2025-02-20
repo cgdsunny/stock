@@ -41,7 +41,7 @@ RUN apt-get update && \
     tar -xzf /tmp/ta-lib.tar.gz -C /tmp/ta-lib --strip-components=1 && \
     cd /tmp/ta-lib && \
     ./configure --prefix=/usr/local && \
-    make -j$(nproc) && \
+    make -j1 && \  # 使用单线程编译以减少资源消耗
     make install && \
     ldconfig && \  # 更新动态链接库缓存
     # 验证 TA-Lib 头文件是否存在
@@ -66,7 +66,7 @@ RUN apt-get purge -y \
         wget && \
     apt-get autoremove -y && \
     apt-get clean && \
-    rm -rf /var/lib/apt/lists/* /root/.cache/*
+    rm -rf /var/lib/apt/lists* /root/.cache/*
 
 # 设置工作目录
 WORKDIR /data
