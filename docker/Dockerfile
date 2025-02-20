@@ -1,58 +1,71 @@
-# 基础镜像
-# https://hub.docker.com/_/python/tags?page=1&name=3.11-slim-bullseye
+# 使用阿里云镜像的基础镜像
 FROM docker.io/python:3.11-slim-bullseye
 
 MAINTAINER myh
-#增加语言utf-8
-ENV LANG=zh_CN.UTF-8
-ENV LC_CTYPE=zh_CN.UTF-8
-ENV LC_ALL=C
-ENV PYTHONPATH=/data/InStock
+ENV LANG=zh_CN.UTF-8 \
+    LC_CTYPE=zh_CN.UTF-8 \
+    LC_ALL=C \
+    PYTHONPATH=/data/InStock \
+    # 关键：强制指定头文件和库路径
+    C_INCLUDE_PATH=/usr/include/ta-lib/ \
+    CPLUS_INCLUDE_PATH=/usr/include/ta-lib/ \
+    LD_LIBRARY_PATH=/usr/local/lib
+
 EXPOSE 9988
 
-# 使用国内镜像地址加速。修改debian apt更新地址，pip地址，设置时区
-# https://opsx.alibaba.com/mirror
-# https://mirrors.tuna.tsinghua.edu.cn/help/pypi/
-# cat /etc/apt/sources.list 参考原始地址，再确定怎么样替换
-# 安装依赖库
-# apt-get autoremove -y 删除没有用的依赖lib
-# apt-get --purge remove 软件包名称 , 删除已安装包（不保留配置文件)
-RUN sed -i "s@http://\(deb\|security\).debian.org@https://mirrors.aliyun.com@g" /etc/apt/sources.list && \
-    echo  "[global]\n\
-index-url = https://mirrors.aliyun.com/pypi/simple\n\
-trusted-host = mirrors.aliyun.com" > /etc/pip.conf && \
+# 配置阿里云镜像源、时区和依赖安装
+RUN sed -i "s@http://$deb\|security$.debian.org@https://mirrors.aliyun.com@g" /etc/apt/sources.list && \
+    printf "[global]\nindex-url = https://mirrors.aliyun.com/pypi/simple\ntrusted-host = mirrors.aliyun.com\n" > /etc/pip.conf && \
     ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
     echo "Asia/Shanghai" > /etc/timezone && \
+    # 安装系统依赖（包含 TA-Lib 编译所需）
     apt-get update && \
-    apt-get install -y cron gcc make python3-dev default-libmysqlclient-dev build-essential pkg-config curl && \
-    pip install supervisor && \
-    pip install mysqlclient && \
-    pip install requests && \
-    pip install arrow && \
-    pip install numpy && \
-    pip install SQLAlchemy && \
-    pip install PyMySQL && \
-    pip install Logbook && \
-    pip install python_dateutil && \
-    pip install py_mini_racer && \
-    pip install tqdm && \
-    pip install beautifulsoup4 && \
-    pip install bokeh && \
-    pip install pandas && \
-    pip install tornado && \
-    pip install mini-racer && \
-    pip install easytrader && \
-    mkdir ta-lib && \
-    curl -SL $(curl -s https://api.github.com/repos/ta-lib/ta-lib/releases/latest | grep browser_download_url | cut -d'"' -f4 |grep -E 'tar.gz$') | tar -xz --strip-components=1 -C ./ta-lib && \
-    cd ta-lib/ && \
-    ./configure && \
-    make && \
+    apt-get install -y \
+        cron \
+        gcc \
+        make \
+        python3-dev \
+        default-libmysqlclient-dev \
+        build-essential \
+        pkg-config \
+        curl \
+        wget \
+        # 关键：安装 TA-Lib 开发头文件
+        libta-lib-dev \
+        && \
+    # 手动编译 TA-Lib（确保头文件路径正确）
+    mkdir -p /tmp/ta-lib && \
+    wget -O /tmp/ta-lib.tar.gz https://downloads.sourceforge.net/project/ta-lib/ta-lib/0.4.0/ta-lib-0.4.0-src.tar.gz && \
+    tar -xzf /tmp/ta-lib.tar.gz -C /tmp/ta-lib --strip-components=1 && \
+    cd /tmp/ta-lib && \
+    ./configure --prefix=/usr && \
+    make -j$(nproc) && \
     make install && \
-    cd .. && \
-    pip install TA-Lib && \
-    rm -rf ta-lib* && \
-    apt-get --purge remove -y gcc make python3-dev default-libmysqlclient-dev curl && \
-    rm -rf /root/.cache/* && rm -rf /var/lib/apt/lists/* && apt-get clean && apt-get autoclean && apt-get autoremove -y
+    cd / && \
+    # 验证头文件路径（调试用）
+    ls -l /usr/include/ta-lib/ta_defs.h && \
+    rm -rf /tmp/ta-lib* && \
+    # 升级 pip 并安装 Python 依赖
+    pip install --upgrade pip && \
+    pip install \
+        TA-Lib \  # 注意包名是短横线
+        --no-cache-dir && \
+    # 清理构建工具（确保在最后一步清理）
+    apt-get purge -y \
+        gcc \
+        make \
+        python3-dev \
+        default-libmysqlclient-dev \
+        build-essential \
+        pkg-config \
+        curl \
+        wget \
+        && \
+    apt-get autoremove -y && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* /root/.cache/*
+
+# 其他步骤保持不变...
 
 WORKDIR /data
 #InStock软件
